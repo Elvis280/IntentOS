@@ -1,7 +1,8 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.planner.planner import create_plan
+from app.services.planner import create_plan
+
 
 router = APIRouter(
     prefix="/planner",

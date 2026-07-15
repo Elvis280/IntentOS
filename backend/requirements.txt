@@ -36,6 +36,8 @@ tenacity==9.1.4
 # Screen capture & image processing
 mss==10.2.0
 pillow==12.3.0
+numpy==2.5.1
+opencv-python==5.0.0.93
 
 # Desktop automation
 pyautogui==0.9.54

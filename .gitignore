@@ -27,12 +27,14 @@ ENV/
 .coverage
 htmlcov/
 *.xml
+TEST_RESULTS.md
 
 # Byte-compiled cache
 *.pyc
 
 # Screenshots captured at runtime
 backend/screenshots/
+screenshots/
 
 # ─── Node / Frontend ─────────────────────────────────────────────────────────
 node_modules/

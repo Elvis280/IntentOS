@@ -7,6 +7,7 @@ class PlanStep(BaseModel):
     action: str
     target: Optional[str] = None
     description: str
+    expected_result: str
 
 
 class TaskPlan(BaseModel):

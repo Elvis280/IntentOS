@@ -1,82 +1,26 @@
-import { useEffect,useState } from 'react'
-import api from "./services/api";
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import Sidebar from './components/Sidebar'
+import Overview from './pages/Overview'
+import Vision from './pages/Vision'
+import History from './pages/History'
+import Settings from './pages/Settings'
 
-function App(){
-  const [status, setStatus] = useState(null);
-  const [result, setResult] = useState(null);
-
-  const [image,setImage] = useState("");
-
-  useEffect(()=>{
-    api.get("/").then(res=> setStatus(res.data)).catch(console.error);
-  },[]);
-
-async function analyzeScreen() {
-    try{
-      const res = await api.post("/vision/analyze");
-      setImage(res.data.image);
-      setResult(res.data.world)
-    }
-    catch(err){
-      console.error(err);
-    }
-
-  }
-
+function App() {
   return (
-    <div style={{padding:"40px"}}>
-      <h1>IntentOS</h1>
-      <p><strong>Backend Status:</strong> {status?.Status}</p>
-      <button onClick={analyzeScreen}>Analyze Screen</button>
-      <br />
-      <br />
-      {result && (
-        <div>
-
-          <h2>World State</h2>
-
-          <p>
-            <strong>Summary:</strong> {result.summary}
-          </p>
-
-          <p>
-            <strong>Active Window:</strong> {result.active_window}
-          </p>
-
-          <h3>Applications</h3>
-
-          <ul>
-            {result.applications?.map(app => (
-              <li key={app}>{app}</li>
-            ))}
-          </ul>
-
-          <h3>Buttons</h3>
-
-          <ul>
-            {result.buttons?.map(button => (
-              <li key={button}>{button}</li>
-            ))}
-          </ul>
-
-          <h3>Visible Text</h3>
-
-          <ul>
-            {result.text?.map((txt, index) => (
-              <li key={index}>{txt}</li>
-            ))}
-          </ul>
-
-        </div>
-      )}
-      {image && (<img 
-      src={`data:image/png;base64,${image}`} 
-      alt="Screenshot" 
-      width="800"
-      />
-      )}
-    </div>
-  );
+    <Router>
+      <div className="flex h-screen w-full bg-background text-foreground overflow-hidden font-sans">
+        <Sidebar />
+        <main className="flex-1 flex overflow-hidden relative">
+          <Routes>
+            <Route path="/" element={<Overview />} />
+            <Route path="/vision" element={<Vision />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </main>
+      </div>
+    </Router>
+  )
 }
 
-export default App;
+export default App
