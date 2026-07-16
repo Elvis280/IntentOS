@@ -21,7 +21,7 @@ class Executor:
                 params.get("function"),
                 params.get("args", {})
             )
-
+            return
 
         if action == "OPEN_APPLICATION":
             self.open_application(params.get("target"))

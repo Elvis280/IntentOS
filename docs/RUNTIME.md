@@ -69,7 +69,7 @@ Session
     ↓
 Job Created
     ↓
-Observe (Capture screen)
+Observe (Capture screen, or reuse cached screenshot from previous step)
     ↓
 Vision (Process image into semantic blocks)
     ↓
@@ -81,9 +81,9 @@ Policy (Validate action against hardcoded safety/optimization rules)
     ↓
 Execute (Translate action into physical machine interaction)
     ↓
-Verify (Compare pre/post World states to ensure success)
+Verify (Compare pre/post World states to ensure success, evaluating any generic side-effects)
     ↓
-Update Runtime State (Commit history, broadcast events)
+Update Runtime State (Commit history, broadcast events, cache Observation for next step)
     ↓
 [Continue to next step or Complete Job]
 ```

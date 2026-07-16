@@ -132,7 +132,7 @@ IntentOS differentiates cognitive structures to prevent ambiguity:
 
 ### 4.12 Verifier
 * **Purpose:** To close the execution loop safely.
-* **Responsibilities:** Compares the World Model before and after execution to answer one question: *"Did the intended effect occur?"*
+* **Responsibilities:** Compares the World Model before and after execution to answer one question: *"Did the intended effect occur?"* This includes both specific action evaluations and generic side-effect detection (e.g., to validate dynamic `USE_SKILL` outcomes without rigid rules).
 * **Why Separate:** Verification requires a distinct cognitive perspective to prevent the Reasoner from hallucinating success. It grounds the loop in reality.
 
 ### 4.13 Memory (Future)

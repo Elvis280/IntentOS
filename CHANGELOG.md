@@ -16,6 +16,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.0.1] - 2026-07-16
+
+### Fixed
+- **Office Application Skills API Mismatch**: `powerpoint.py`, `word.py`, and `excel.py` now internally retrieve COM objects via `GetActiveObject()` instead of expecting them as JSON-deserialized parameters from the executor.
+- **Generic Action Verification**: Improved `verifier.py` to evaluate substantive changes (e.g., active window, applications, text, UI elements) natively, properly validating `USE_SKILL` executions rather than defaulting to assumed success.
+- **Frontend Model Sync**: Re-aligned `agent.ts` interface definitions (`ReflectionResult`, `VerificationResult`, `RecoveryResult`) with backend Pydantic models. Updated `RuntimeStatePanel.tsx` to read the correct fields.
+- **Logging Architecture**: Eliminated bypassed `print()` calls in `loop.py`, `executor.py`, `agent.py`, `manager.py`, and `settings.py`, replacing them with structured `app.core.logger` logs.
+
+### Changed
+- **Observation Caching**: The Runtime Loop (`loop.py`) now caches the post-verification screenshot and vision models (`image_after`, `vision_after`) and reuses them as the initial observation for the next step, eliminating duplicate Vision LLM API calls per loop iteration.
+
+---
+
 ## [1.0.0] – 2026-07-16
 
 ### Added
