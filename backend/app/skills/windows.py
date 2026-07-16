@@ -1,31 +1,35 @@
-"""
-app/skills/windows.py
-
-Windows application management skill for IntentOS.
-"""
+import ctypes
 import subprocess
-import pygetwindow as gw
-from app.executor.executor import Executor
-
-_executor = Executor()
+import pyautogui
 
 def open_application(name: str):
-    """Open a Windows application using its executable name."""
-    _executor.execute({
-        "action": "OPEN_APPLICATION",
-        "parameters": {"target": name}
-    })
+    """Launch a native Windows application by executable name.
 
-def close_application(name: str):
-    """Forcefully close an application by its executable name."""
-    subprocess.run(["taskkill", "/IM", f"{name}.exe", "/F"], capture_output=True)
+    Used by the Policy Engine (Rule 2) when the reasoner tries to launch
+    a known app via PRESS_KEY or a blind CLICK. The `name` argument is
+    the subprocess-friendly executable (e.g. 'calc', 'notepad', 'mspaint',
+    'cmd', 'explorer', 'winword', 'excel', 'powerpnt', 'taskmgr',
+    'regedit') resolved from app/core/constants.APP_EXECUTABLES.
+    """
+    if not name:
+        raise Exception("Application name missing.")
 
-def switch_application(name: str):
-    """Switch focus to an already open application by matching its window title."""
-    windows = gw.getWindowsWithTitle(name)
-    if windows:
-        # Try to activate the first matching window
-        try:
-            windows[0].activate()
-        except Exception as e:
-            print(f"Failed to activate window: {e}")
+    try:
+        subprocess.Popen(name)
+    except Exception as e:
+        raise Exception(f"Failed to open application: {e}")
+
+def minimize_all():
+    """Minimize all windows (Win + D)."""
+    pyautogui.hotkey('win', 'd')
+
+def close_active():
+    """Close the active window (Alt + F4)."""
+    pyautogui.hotkey('alt', 'f4')
+
+def switch_to(index: int = 1):
+    """Switch to a recently used window using Alt+Tab."""
+    pyautogui.keyDown('alt')
+    for _ in range(index):
+        pyautogui.press('tab')
+    pyautogui.keyUp('alt')

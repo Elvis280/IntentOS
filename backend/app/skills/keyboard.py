@@ -1,35 +1,9 @@
-"""
-app/skills/keyboard.py
-
-Keyboard automation skill for IntentOS.
-"""
 import pyautogui
-from app.executor.executor import Executor
 
-_executor = Executor()
+def type_text(text: str, interval: float = 0.05):
+    """Type text out on the keyboard."""
+    pyautogui.write(text, interval=interval)
 
-def press(key: str):
-    """Press a single keyboard key."""
-    _executor.execute({
-        "action": "PRESS_KEY",
-        "parameters": {"key": key}
-    })
-
-def hotkey(*keys):
-    """Press a combination of keys (e.g. 'ctrl', 'c')."""
+def press_shortcut(keys: list):
+    """Press a keyboard shortcut (e.g. ['ctrl', 'c'])."""
     pyautogui.hotkey(*keys)
-
-def type_text(text: str):
-    """Type text out."""
-    _executor.execute({
-        "action": "TYPE",
-        "parameters": {"text": text}
-    })
-
-def copy():
-    """Copy current selection to clipboard."""
-    hotkey("ctrl", "c")
-
-def paste():
-    """Paste from clipboard."""
-    hotkey("ctrl", "v")

@@ -4,11 +4,13 @@ import webbrowser
 import time
 
 
+from app.core.logger import logger
+
 class Executor:
 
     def execute(self, step):
 
-        print("NEW EXECUTOR LOADED")
+        logger.info("[Executor] NEW EXECUTOR LOADED")
 
         action = step["action"]
         params = step.get("parameters", {})
@@ -56,7 +58,7 @@ class Executor:
         elif action == "WAIT":
             seconds = params.get("seconds")
             if seconds is None:
-                print("[WAIT] 'seconds' not specified in params — defaulting to 1s.")
+                logger.warning("[WAIT] 'seconds' not specified in params — defaulting to 1s.")
                 seconds = 1
             time.sleep(float(seconds))
 

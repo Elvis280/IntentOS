@@ -12,11 +12,6 @@ What changed vs v1
 - POST /agent/resume/{job_id}  →  unpauses
 - POST /agent/stop/{job_id}    →  terminates the loop cleanly
 
-The agent loop itself (_run_job) is a lightly refactored copy of the
-original /run handler.  The only structural additions are:
-  1. job.wait_if_paused()   — after each phase, yields if paused
-  2. job.should_stop()      — checked at the top of every iteration
-  3. job.update(...)        — records live state after each phase
 """
 
 import time
@@ -33,185 +28,14 @@ from app.vision.analyzer import build_world
 from app.executor.executor import Executor
 from app.services.reasoner import next_action
 from app.services.policy import policy
-from app.core.job_manager import job_manager, Job, JobStatus
-
+from app.runtime.job_manager import job_manager, JobStatus
+from app.runtime.loop import run_job, fuzzy_duplicate
+from app.core.logger import logger
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
 
 capture  = ScreenCapture()
 executor = Executor()
-
-
-# ── Helpers ──────────────────────────────────────────────────────────────────
-
-def fuzzy_duplicate(a: dict, b: dict) -> bool:
-    """Return True if two actions are considered equivalent.
-
-    For CLICK actions, coordinates within ±15 px on both axes are treated
-    as the same action — catches retry loops where the reasoner varies
-    coordinates slightly but repeats the same failed strategy.
-    """
-    if a["action"] != b["action"]:
-        return False
-    if a["action"] == "CLICK":
-        ap = a.get("parameters", {})
-        bp = b.get("parameters", {})
-        return (
-            abs(ap.get("x", 0) - bp.get("x", 0)) <= 15
-            and abs(ap.get("y", 0) - bp.get("y", 0)) <= 15
-        )
-    return a.get("parameters") == b.get("parameters")
-
-
-# ── The agent loop (runs in a background thread) ──────────────────────────────
-
-def _run_job(job: Job) -> None:
-    """
-    Executes the full Observe→Reason→Policy→Execute→Verify loop for a job.
-    Reads job.should_stop() and job.wait_if_paused() at every phase boundary
-    so that pause/resume/stop work without killing the thread forcibly.
-    """
-    job.status = JobStatus.RUNNING
-    history: list = []
-
-    try:
-        for step in range(1, job.max_steps + 1):
-
-            # ── Stop check ───────────────────────────────────────────────────
-            if job.should_stop():
-                job.status = JobStatus.STOPPED
-                return
-
-            # ── Pause gate ───────────────────────────────────────────────────
-            job.wait_if_paused()
-            if job.should_stop():          # may have been stopped while paused
-                job.status = JobStatus.STOPPED
-                return
-
-            # ── Phase 1: Observe ─────────────────────────────────────────────
-            job.update(stage="Observing", step=step)
-            image  = capture.capture()
-            vision = analyze(image)
-            state  = build_world(vision)
-            world.update(state)
-            before = world.get().model_dump()
-
-            # Encode the screenshot for the frontend
-            import base64, io
-            from PIL import Image as PILImage
-            buf = io.BytesIO()
-            # capture() returns a PIL Image; save as PNG into buffer
-            img_obj = image if hasattr(image, "save") else PILImage.fromarray(image)
-            img_obj.save(buf, format="PNG")
-            screenshot_b64 = base64.b64encode(buf.getvalue()).decode()
-
-            job.update(
-                stage="Observing",
-                world=before,
-                screenshot=screenshot_b64,
-                history=history,
-            )
-
-            job.wait_if_paused()
-            if job.should_stop():
-                job.status = JobStatus.STOPPED
-                return
-
-            # ── Phase 2: Reason ───────────────────────────────────────────────
-            job.update(stage="Reasoning")
-            action = next_action(job.goal, before, history, image)
-
-            job.update(
-                stage="Reasoning",
-                thought=action.get("thought", ""),
-                action=action,
-            )
-
-            # Repeated-action guard
-            if history and fuzzy_duplicate(action, history[-1]["action"]):
-                print("[Agent] Repeated action detected — stopping loop.")
-                job.update(stage="Completed", thought="Repeated action detected. Stopping.")
-                job.status = JobStatus.COMPLETED
-                return
-
-            if action["action"] == "DONE":
-                job.update(stage="Completed", thought=action.get("thought", "Goal completed."))
-                job.status = JobStatus.COMPLETED
-                return
-
-            job.wait_if_paused()
-            if job.should_stop():
-                job.status = JobStatus.STOPPED
-                return
-
-            # ── Phase 3: Policy ───────────────────────────────────────────────
-            job.update(stage="Policy")
-            action = policy.apply(
-                goal=job.goal,
-                world=before,
-                history=history,
-                action=action,
-            )
-            job.update(action=action)
-
-            if action["action"] == "REASON_AGAIN":
-                print("[Agent] Policy returned REASON_AGAIN — skipping execution.")
-                history.append({"action": action, "verified": False})
-                job.update(history=history)
-                continue
-
-            job.wait_if_paused()
-            if job.should_stop():
-                job.status = JobStatus.STOPPED
-                return
-
-            # ── Phase 4: Execute ──────────────────────────────────────────────
-            job.update(stage="Executing")
-            executor.execute(action)
-            time.sleep(1.5)
-
-            job.wait_if_paused()
-            if job.should_stop():
-                job.status = JobStatus.STOPPED
-                return
-
-            # ── Phase 5: Verify ───────────────────────────────────────────────
-            job.update(stage="Verifying")
-            image  = capture.capture()
-            vision = analyze(image)
-            state  = build_world(vision)
-            world.update(state)
-            after = world.get().model_dump()
-
-            verified = verifier.verify(before, after, action)
-            history.append({"action": action, "verified": verified})
-
-            # Refresh screenshot after execution
-            buf2 = io.BytesIO()
-            img_obj2 = image if hasattr(image, "save") else PILImage.fromarray(image)
-            img_obj2.save(buf2, format="PNG")
-            screenshot_b64_after = base64.b64encode(buf2.getvalue()).decode()
-
-            job.update(
-                stage="Verifying",
-                world=after,
-                history=history,
-                screenshot=screenshot_b64_after,
-            )
-
-            if not verified:
-                print("[Agent] Verification failed.")
-                job.update(stage="Failed", thought="Verification failed. Stopping.")
-                job.status = JobStatus.FAILED
-                return
-
-        # Exhausted max_steps
-        job.status = JobStatus.COMPLETED
-
-    except Exception as exc:
-        job.error  = str(exc)
-        job.status = JobStatus.FAILED
-        print(f"[Agent] Job {job.job_id} failed with exception: {exc}")
 
 
 # ── Request models ────────────────────────────────────────────────────────────
@@ -230,7 +54,7 @@ async def start_agent(data: Goal):
     """
     job = job_manager.create(goal=data.goal)
     thread = threading.Thread(
-        target=_run_job,
+        target=run_job,
         args=(job,),
         daemon=True,
         name=f"agent-job-{job.job_id[:8]}",
@@ -281,6 +105,24 @@ async def resume_agent(job_id: str):
     job.resume()
     return {"job_id": job_id, "status": job.status.value}
 
+class ClarificationResponse(BaseModel):
+    answer: str
+
+@router.post("/{job_id}/clarify")
+async def clarify_agent(job_id: str, data: ClarificationResponse):
+    job = job_manager.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job {job_id!r} not found.")
+    
+    # Store the answer on the job
+    job.clarification_answer = data.answer
+    
+    # Auto-resume the job if it was paused
+    if job.status == JobStatus.PAUSED:
+        job.resume()
+        
+    return {"job_id": job_id, "status": job.status.value}
+
 
 @router.post("/stop/{job_id}")
 async def stop_agent(job_id: str):
@@ -314,12 +156,12 @@ async def run_agent(data: Goal):
         action = next_action(data.goal, before, history, image)
 
         if history and fuzzy_duplicate(action, history[-1]["action"]):
-            print("[Agent] Repeated action detected — stopping loop.")
+            logger.warning("[Agent] Repeated action detected — stopping loop.")
             break
 
-        print("=" * 50)
-        print(action)
-        print("=" * 50)
+        logger.info("=" * 50)
+        logger.info(action)
+        logger.info("=" * 50)
 
         if action["action"] == "DONE":
             break
@@ -332,7 +174,7 @@ async def run_agent(data: Goal):
         )
 
         if action["action"] == "REASON_AGAIN":
-            print("[Agent] Policy returned REASON_AGAIN — skipping execution.")
+            logger.warning("[Agent] Policy returned REASON_AGAIN — skipping execution.")
             history.append({"action": action, "verified": False})
             continue
 
@@ -349,7 +191,7 @@ async def run_agent(data: Goal):
         history.append({"action": action, "verified": verified})
 
         if not verified:
-            print("Verification failed.")
+            logger.warning("Verification failed.")
             break
 
     return {"goal": data.goal, "history": history}

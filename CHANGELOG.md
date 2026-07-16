@@ -12,7 +12,65 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Planned
 - Memory module integration
 - World-state diffing
-- Frontend UI for goal input and execution trace
+- WebSocket real-time streaming (replacing polling)
+
+---
+
+## [1.0.0] – 2026-07-16
+
+### Added
+- **React Frontend** — full dark-mode desktop-style dashboard built with React 19, Vite 8, TailwindCSS v4, Framer Motion, Lucide React, and Zustand.
+  - Three-column layout: persistent sidebar, main execution workspace, live context panel.
+  - `src/pages/Overview.jsx` — primary dashboard assembling all agent-monitoring components.
+  - `src/pages/Vision.jsx` — detailed screen-context viewer with raw World Model JSON.
+  - `src/pages/History.jsx` — scrollable list of past agent runs with status badges.
+  - `src/pages/Settings.jsx` — backend URL, model, delay, and auto-execute configuration.
+  - `src/components/GoalInput.jsx` — command textarea with Run / Pause / Resume / Stop controls.
+  - `src/components/StatusCard.jsx` — animated phase badge (Observing → Reasoning → Executing …) with dynamic colored glow.
+  - `src/components/ThoughtCard.jsx` — displays the Reasoner's live thought string.
+  - `src/components/ActionCard.jsx` — displays the current action type and payload.
+  - `src/components/ProgressCard.jsx` — animated progress bar with shimmer while agent is running.
+  - `src/components/Timeline.jsx` — scrollable execution timeline with per-step verification icons and pulsing glow for pending steps.
+  - `src/components/ScreenshotPanel.jsx` — live desktop screenshot with scanning laser animation during Observing/Verifying phases.
+  - `src/components/WorldPanel.jsx` — staggered-animation display of active window, apps, detected buttons, and visible text.
+  - `src/components/SystemInfo.jsx` — SVG progress rings for CPU and Memory, live latency readout.
+  - `src/components/Sidebar.jsx` — navigation with Framer Motion `layoutId` active-tab spring.
+- `src/services/api.js` — centralised API client; all backend calls (`startAgent`, `pauseAgent`, `resumeAgent`, `stopAgent`, `getStatus`, `getHistory`) in one place.
+- `src/store/agentStore.js` — Zustand store with 500 ms polling loop, snake_case → camelCase mapping, and auto-stop on terminal job status.
+- `src/lib/utils.js` — `cn()` helper (clsx + tailwind-merge) for shadcn/ui compatibility.
+
+### Changed
+- `index.html` — updated title to "IntentOS", added Google Fonts (Inter + JetBrains Mono).
+- `src/index.css` — full TailwindCSS v4 `@theme` block with the IntentOS color palette; custom scrollbar styles.
+- `vite.config.js` — **fixed critical styling bug**: registered `@tailwindcss/vite` plugin so TailwindCSS v4 utility classes are actually processed (previously the plugin was installed but not wired, causing all classes to be ignored).
+
+### Fixed
+- `StatusCard.jsx` — `ReferenceError: Cannot access 'Loader' before initialization`: `SpinnerIcon` component was referenced in `STATUS_CONFIG` before its declaration. Moved the component above the config object.
+- `Timeline.jsx` — `TypeError: Cannot read properties of undefined (reading 'map')`: component read `timeline` from the store but the store key was renamed to `history`. Fixed key reference and added `?? []` guard.
+- `WorldPanel.jsx` — `TypeError: Cannot read properties of undefined (reading 'activeWindow')`: component read `worldModel` but the store key is `world`. Fixed key reference and applied optional chaining (`?.`) to all property accesses.
+- `agentStore.js / _mapWorld` — backend `WorldState` serialises as `buttons` and `text`, not `buttons_detected` / `visible_text`. Updated mapper to read the correct backend fields first.
+
+---
+
+## [0.8.0] – 2026-07-15
+
+### Added
+- `app/core/job_manager.py` — lightweight in-memory Job Manager with UUID-keyed jobs, thread-safe state, and `threading.Event`-based pause/resume/stop mechanics.
+  - Each `Job` stores `stage`, `thought`, `action`, `world`, `history`, `screenshot` (base64 PNG), `progress`, and `error`.
+  - `job.wait_if_paused()` — called by the agent thread after every pipeline phase; blocks cleanly without busy-looping.
+  - `job.should_stop()` — checked at the top of each loop iteration for graceful termination.
+  - Module-level singleton `job_manager` imported by the API layer.
+
+### Changed
+- `app/api/agent.py` — converted to job-based architecture:
+  - `POST /agent/start` — creates a job, runs `_run_job()` in a daemon thread, returns `{"job_id": "…"}` immediately.
+  - `GET  /agent/status/{job_id}` — returns full live job state polled by the frontend every 500 ms.
+  - `GET  /agent/history/{job_id}` — returns execution history list only.
+  - `POST /agent/pause/{job_id}` — pauses the agent loop after the current phase.
+  - `POST /agent/resume/{job_id}` — unpauses a paused job.
+  - `POST /agent/stop/{job_id}` — signals clean termination.
+  - `POST /agent/run` — **kept intact** (synchronous legacy endpoint for backward compatibility).
+  - `_run_job()` loop updates `job.update(stage=…)` after every Observe / Reason / Policy / Execute / Verify phase and screenshots are base64-encoded for the frontend.
 
 ---
 
@@ -153,7 +211,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ---
 
 <!-- Releases -->
-[Unreleased]: https://github.com/Elvis280/IntentOS/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Elvis280/IntentOS/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Elvis280/IntentOS/compare/v0.8.0...v1.0.0
+[0.8.0]: https://github.com/Elvis280/IntentOS/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Elvis280/IntentOS/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Elvis280/IntentOS/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Elvis280/IntentOS/compare/v0.4.0...v0.5.0
